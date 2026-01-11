@@ -1,94 +1,109 @@
 ﻿using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Playables;
+using UnityEngine.Animations;
 
 public class SlamSkill : MonoBehaviour
 {
+    [Header("Slam Settings")]
     public int slamDamage = 30;
     public float slamRadius = 2.0f;
     public float slamManaCost = 40f;
-    public float slamPushForce = 20f;  // downward push force
+    public float slamPushForce = 20f;
+
+    [Header("Animation Settings")]
+    public Animator animator;
+    public AnimationClip slamAnimationClip;
 
     private PlayerController playerController;
     private Rigidbody2D rb;
+    private PlatformerAnimScript animScript;
+
+    private PlayableGraph playableGraph;
 
     private void Start()
     {
         playerController = GetComponent<PlayerController>();
         rb = GetComponent<Rigidbody2D>();
+        animScript = GetComponent<PlatformerAnimScript>();
 
-        if (playerController == null)
-        {
-            Debug.LogError("SlamSkill: PlayerController component not found on the same GameObject!");
-        }
-        if (rb == null)
-        {
-            Debug.LogError("SlamSkill: Rigidbody2D component not found on the same GameObject!");
-        }
+        if (animator == null)
+            animator = GetComponent<Animator>();
     }
 
     private void Update()
     {
         if (Input.GetKeyDown(KeyCode.E))
-        {
             TrySlam();
-        }
     }
 
     void TrySlam()
     {
-        if (playerController == null) return;
+        if (playerController == null || slamAnimationClip == null) return;
 
         if (playerController.currentMana >= slamManaCost)
         {
+            PlaySlamAnimation();
             Slam();
             playerController.SpendMana(slamManaCost);
             playerController.UpdateManaUI();
         }
-        else
-        {
-            Debug.Log("Not enough mana for Slam!");
-        }
+    }
+
+    void PlaySlamAnimation()
+    {
+        if (animator == null) return;
+
+        // Pause normal animation updates
+        if (animScript != null)
+            animScript.enabled = false;
+
+        // Create a PlayableGraph to play the clip directly
+        playableGraph = PlayableGraph.Create("SlamPlayableGraph");
+        var playableOutput = AnimationPlayableOutput.Create(playableGraph, "Animation", animator);
+        var clipPlayable = AnimationClipPlayable.Create(playableGraph, slamAnimationClip);
+        playableOutput.SetSourcePlayable(clipPlayable);
+
+        playableGraph.Play();
+
+        StartCoroutine(ReenableAnimScriptAfter(slamAnimationClip.length));
+    }
+
+    private IEnumerator ReenableAnimScriptAfter(float duration)
+    {
+        yield return new WaitForSeconds(duration);
+        if (animScript != null)
+            animScript.enabled = true;
+
+        if (playableGraph.IsValid())
+            playableGraph.Destroy();
     }
 
     void Slam()
     {
         Vector2 slamCenter = (Vector2)transform.position + Vector2.down * 1f;
-
         Collider2D[] hits = Physics2D.OverlapCircleAll(slamCenter, slamRadius);
 
-        //just copy and paste the same bit but change the health script name
         foreach (Collider2D hit in hits)
         {
             EnemyHealth enemy = hit.GetComponent<EnemyHealth>();
             if (enemy != null)
             {
                 enemy.TakeDamage(slamDamage);
-                continue; // avoid double-processing the same collider
+                continue;
             }
 
-            KnightHealth KnightBoss = hit.GetComponent<KnightHealth>();
-            if (KnightBoss != null)
+            KnightHealth boss = hit.GetComponent<KnightHealth>();
+            if (boss != null)
             {
-                KnightBoss.TakeDamage(slamDamage);
-                Debug.Log($"SlamSkill dealt {slamDamage} damage to {KnightBoss.name}");
+                boss.TakeDamage(slamDamage);
+                Debug.Log($"SlamSkill dealt {slamDamage} damage to {boss.name}");
             }
         }
 
-        // Apply downward push to the player
         if (rb != null)
-        {
             rb.velocity = new Vector2(rb.velocity.x, -slamPushForce);
-        }
 
         Debug.Log("Slam activated!");
-        // Optional: add visual effects, sounds, etc.
-    }
-
-    private void OnDrawGizmosSelected()
-    {
-        Gizmos.color = Color.red;
-        Vector2 slamCenter = (Vector2)transform.position + Vector2.down * 1f;
-        Gizmos.DrawWireSphere(slamCenter, slamRadius);
     }
 }

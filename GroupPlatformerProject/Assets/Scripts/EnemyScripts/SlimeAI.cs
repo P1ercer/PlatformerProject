@@ -19,14 +19,17 @@ public class SlimeAI : MonoBehaviour
     public float jumpInterval = 2f;
 
     Rigidbody2D rb;
+    Animator animator;  // reference to animator
     float jumpTimer;
     bool isGrounded = false;
+    bool isAggro = false; // track whether slime is currently chasing player
 
     void Start()
     {
         player = GameObject.FindGameObjectWithTag("Player");
         home = transform.position;
         rb = GetComponent<Rigidbody2D>();
+        animator = GetComponent<Animator>();
         jumpTimer = jumpInterval;
     }
 
@@ -36,46 +39,61 @@ public class SlimeAI : MonoBehaviour
 
         if (chaseDir.magnitude < chaseTriggerDistance)
         {
+            // Chase the player
             chaseDir.Normalize();
             rb.velocity = new Vector2(chaseDir.x * chaseSpeed, rb.velocity.y);
             isHome = false;
-        }
 
-        // Go home and if I'm close enough stop moving
-        else if (returnHome && !isHome)
-        {
-            Vector3 homeDir = home - transform.position;
-            if (homeDir.magnitude > 0.2f)
+            if (!isAggro)
             {
-                homeDir.Normalize();
-                rb.velocity = new Vector2(homeDir.x * chaseSpeed, rb.velocity.y);
+                isAggro = true;
+                animator.Play("SlimeAttack");
+            }
+        }
+        else
+        {
+            // Go home if returning
+            if (returnHome && !isHome)
+            {
+                Vector3 homeDir = home - transform.position;
+                if (homeDir.magnitude > 0.2f)
+                {
+                    homeDir.Normalize();
+                    rb.velocity = new Vector2(homeDir.x * chaseSpeed, rb.velocity.y);
+                }
+                else
+                {
+                    rb.velocity = new Vector2(0, rb.velocity.y);
+                    isHome = true;
+                }
+            }
+            // Patrol when not chasing
+            else if (patrol)
+            {
+                Vector3 displacement = transform.position - home;
+                if (displacement.magnitude > patrolDistance)
+                {
+                    patrolDirection = -displacement;
+                }
+                patrolDirection.Normalize();
+                rb.velocity = new Vector2(patrolDirection.x * chaseSpeed, rb.velocity.y);
+                HandleJumping();
             }
             else
             {
                 rb.velocity = new Vector2(0, rb.velocity.y);
-                isHome = true;
             }
-        }
 
-        // Patrol if the player gets away
-        else if (patrol)
-        {
-            Vector3 displacement = transform.position - home;
-            if (displacement.magnitude > patrolDistance)
+            // Switch to idle animation if no longer aggro
+            if (isAggro)
             {
-                patrolDirection = -displacement;
+                isAggro = false;
+                animator.Play("SlimeIdle");
             }
-            patrolDirection.Normalize();
-            rb.velocity = new Vector2(patrolDirection.x * chaseSpeed, rb.velocity.y);
-            HandleJumping();
-        }
-        else
-        {
-            rb.velocity = new Vector2(0, rb.velocity.y);
         }
     }
 
-    // Jump time, and checking to see if I'm grounded
+    // Handle jumping behavior
     void HandleJumping()
     {
         jumpTimer -= Time.deltaTime;
@@ -86,25 +104,20 @@ public class SlimeAI : MonoBehaviour
         }
     }
 
-    // Am I able to jump? Yes
+    // Ground check
     private void OnCollisionEnter2D(Collision2D collision)
     {
         if (collision.gameObject.CompareTag("Ground"))
-        {
             isGrounded = true;
-        }
     }
 
-    // Am I able to jump? No
     private void OnCollisionExit2D(Collision2D collision)
     {
         if (collision.gameObject.CompareTag("Ground"))
-        {
             isGrounded = false;
-        }
     }
 
-    // Show the chase trigger radius distance
+    // Visualize detection radius
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.red;

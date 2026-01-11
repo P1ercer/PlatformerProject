@@ -15,6 +15,9 @@ EditorBuildSettings:
     path: Assets/Scenes/IsraelTestScene.unity
     guid: 6297f72f74c12dc48affdb581ea29e63
   - enabled: 1
+    path: Assets/Scenes/Lani.unity
+    guid: fcc9a6dcfe15ff34594e1ac8f507b915
+  - enabled: 1
     path: Assets/Scenes/Level 1.unity
     guid: f07dfd45a5a73ac4f9a374fd20f59260
   - enabled: 1
@@ -29,4 +32,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Boss Level.unity
     guid: e9d96c456e0e07c4fb2549ee7948f3bd
+  - enabled: 1
+    path: Assets/Scenes/Credits.unity
+    guid: 22c06cbe38f4f7f4480b9b8c2cc35cee
   m_configObjects: {}

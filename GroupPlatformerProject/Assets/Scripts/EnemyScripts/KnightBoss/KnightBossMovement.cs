@@ -166,4 +166,5 @@ public class KnightBossMovement : MonoBehaviour
 
         rb.velocity = new Vector2(direction.x * runSpeed, rb.velocity.y);
     }
+
 }

@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -21,13 +21,19 @@ public class GoblinAI : MonoBehaviour
     public LayerMask enemyLayers;
     public float attackCooldown = 1f;
 
+    [Header("Animation Settings")]
+    [Tooltip("Animator component for playing attack animation.")]
+    public Animator animator;
+
+    [Tooltip("Trigger name for attack animation.")]
+    private string attackTrigger = "Attack";
+
     private GameObject player;
     private Rigidbody2D rb;
     private Vector3 home;
     private bool isHome = true;
     private bool isReturningHome = false;
     private float lastAttackTime = -Mathf.Infinity;
-
     private int facingDirection = 1; // 1 = right, -1 = left
 
     void Start()
@@ -41,6 +47,10 @@ public class GoblinAI : MonoBehaviour
 
         patrolDirection.Normalize();
         facingDirection = (int)Mathf.Sign(patrolDirection.x);
+
+        // Auto-assign animator if missing
+        if (animator == null)
+            animator = GetComponent<Animator>();
     }
 
     void Update()
@@ -62,6 +72,7 @@ public class GoblinAI : MonoBehaviour
         if (distanceToPlayer <= attackRange && Mathf.Sign(toPlayer.x) == facingDirection && Time.time >= lastAttackTime + attackCooldown)
         {
             Attack();
+            PlayAttackAnimation(); // Play attack animation
             lastAttackTime = Time.time;
             rb.velocity = new Vector2(0, rb.velocity.y); // Stop moving during attack
             return;
@@ -101,9 +112,13 @@ public class GoblinAI : MonoBehaviour
                 enemyHealth.TakeDamage(damage);
             }
         }
+    }
 
-        // Optional: trigger attack animation
-        // GetComponent<Animator>()?.SetTrigger("Attack");
+    void PlayAttackAnimation()
+    {
+        if (animator == null || string.IsNullOrEmpty(attackTrigger)) return;
+
+        animator.SetTrigger(attackTrigger);
     }
 
     void ChasePlayer(Vector3 toPlayer)

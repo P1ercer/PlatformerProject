@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -22,6 +22,13 @@ public class MercenaryAI : MonoBehaviour
     [Header("Edge Detection")]
     public float groundCheckDistance = 0.2f;
 
+    [Header("Animation Settings")]
+    [Tooltip("Animator component for playing attack animation.")]
+    public Animator animator;
+
+    [Tooltip("Trigger name for attack animation.")]
+    private string attackTrigger = "Attack";
+
     private Rigidbody2D rb;
     private Transform player;
     private float lastAttackTime;
@@ -40,6 +47,10 @@ public class MercenaryAI : MonoBehaviour
             player = playerObj.transform;
         else
             Debug.LogError("Player not found! Make sure your player has the tag 'Player'.");
+
+        // Auto-assign animator if missing
+        if (animator == null)
+            animator = GetComponent<Animator>();
     }
 
     void Update()
@@ -80,6 +91,7 @@ public class MercenaryAI : MonoBehaviour
         if (distanceToPlayer <= attackRange && Time.time >= lastAttackTime + attackCooldown)
         {
             AttackPlayer();
+            PlayAttackAnimation(); //  Play attack animation
             lastAttackTime = Time.time;
         }
 
@@ -161,5 +173,15 @@ public class MercenaryAI : MonoBehaviour
 
             Debug.Log($"Mercenary hits player for {attackDamage} damage!");
         }
+    }
+
+    // -------------------------------
+    // Animation Helper
+    // -------------------------------
+    void PlayAttackAnimation()
+    {
+        if (animator == null || string.IsNullOrEmpty(attackTrigger)) return;
+
+        animator.SetTrigger(attackTrigger);
     }
 }

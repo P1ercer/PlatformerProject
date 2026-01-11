@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,6 +11,19 @@ public class SpinSlash : MonoBehaviour
     public int damage = 10;
     public float manaCost = 25f;
 
+    // -------------------------------
+    // Animation Fields
+    // -------------------------------
+    [Header("Animation Settings")]
+    [Tooltip("Animator component for playing the spin animation.")]
+    public Animator animator;
+
+    [Tooltip("Trigger name for spin animation (optional).")]
+    private string spinTrigger = "Spin";
+
+    [Tooltip("Optional animation clip to play instead of a trigger.")]
+    public AnimationClip spinAnimationClip;
+
     private bool isSpinning = false;
     private float spinTimer = 0f;
     private float damageTimer = 0f;
@@ -22,6 +35,10 @@ public class SpinSlash : MonoBehaviour
         playerController = GetComponent<PlayerController>();
         if (playerController == null)
             Debug.LogWarning("PlayerController component not found!");
+
+        // Auto-assign animator if missing
+        if (animator == null)
+            animator = GetComponent<Animator>();
     }
 
     void Update()
@@ -33,6 +50,8 @@ public class SpinSlash : MonoBehaviour
                 playerController.SpendMana(manaCost);
                 playerController.UpdateManaUI();
                 StartSpin();
+
+                PlaySpinAnimation();
             }
             else
             {
@@ -83,35 +102,12 @@ public class SpinSlash : MonoBehaviour
 
         foreach (Collider2D collider in hits)
         {
-            if (collider.CompareTag("Enemy"))
-            {
-                // Check if enemy is strictly to the left or right of player
-                float directionToEnemy = collider.transform.position.x - transform.position.x;
-
-                if (directionToEnemy > 0)
-                {
-                    // Enemy is on the right side
-                    DealDamage(collider);
-                }
-                else if (directionToEnemy < 0)
-                {
-                    // Enemy is on the left side
-                    DealDamage(collider);
-                }
-                // If directionToEnemy == 0, enemy is exactly aligned on X axis, ignore
-            }
-            if (collider.CompareTag("KnightBoss"))
+            if (collider.CompareTag("Enemy") || collider.CompareTag("KnightBoss"))
             {
                 float directionToEnemy = collider.transform.position.x - transform.position.x;
 
-                if (directionToEnemy > 0)
-                {
+                if (directionToEnemy != 0)
                     DealDamage(collider);
-                }
-                else if (directionToEnemy < 0)
-                {
-                    DealDamage(collider);
-                }
             }
         }
     }
@@ -125,19 +121,35 @@ public class SpinSlash : MonoBehaviour
             enemyHealth.TakeDamage(damage);
             Debug.Log($"Dealt {damage} damage to {enemyCollider.name}");
         }
-        else
+
+        KnightHealth knightHealth = enemyCollider.GetComponent<KnightHealth>();
+        if (knightHealth != null)
         {
-            Debug.LogWarning($"EnemyHealth component missing on {enemyCollider.name}");
-        }
-        KnightHealth KnightHealth = enemyCollider.GetComponent<KnightHealth>();
-        if (KnightHealth != null)
-        {
-            KnightHealth.TakeDamage(damage);
+            knightHealth.TakeDamage(damage);
             Debug.Log($"Dealt {damage} damage to {enemyCollider.name}");
         }
-        else
+    }
+
+    // ---------------------------------------
+    // Animation Helper
+    // ---------------------------------------
+    void PlaySpinAnimation()
+    {
+        if (animator == null) return;
+
+        if (!string.IsNullOrEmpty(spinTrigger))
         {
-            Debug.LogWarning($"EnemyHealth component missing on {enemyCollider.name}");
+            animator.SetTrigger(spinTrigger);
         }
+        else if (spinAnimationClip != null)
+        {
+            //animator.Play(spinAnimationClip.name);
+        }
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.blue;
+        Gizmos.DrawWireSphere(transform.position, attackRadius);
     }
 }

@@ -13,6 +13,12 @@ public class KnightBossPhase1Attacks : MonoBehaviour
         public float horizontalForce = 5f;
         public float verticalForce = 0f;
         public float damage = 10f;
+
+        [Header("🎞 Animation")]
+        [Tooltip("Animator trigger name to play for this attack")]
+        [HideInInspector] public string animationTrigger;
+        [Tooltip("Optional animation clip to play directly (used if no trigger is set)")]
+        public AnimationClip animationClip;
     }
 
     [Header("Attack Settings")]
@@ -28,12 +34,13 @@ public class KnightBossPhase1Attacks : MonoBehaviour
     public KnightBossHitbox lungeHitbox;
 
     [Header("Environment Checks")]
-    public LayerMask groundLayerMask;  // ✅ assign “Ground” layer here
+    public LayerMask groundLayerMask;
     public float groundCheckDistance = 0.5f;
 
     private Rigidbody2D rb;
     private Collider2D bossCollider;
     private KnightBossMovement movement;
+    private Animator anim;
     private Transform player;
 
     [HideInInspector] public bool isAttacking = false;
@@ -59,6 +66,7 @@ public class KnightBossPhase1Attacks : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         bossCollider = GetComponent<Collider2D>();
         movement = GetComponent<KnightBossMovement>();
+        anim = GetComponent<Animator>(); // 👈 assign automatically if on same GameObject
 
         GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
         if (playerObj != null)
@@ -79,6 +87,14 @@ public class KnightBossPhase1Attacks : MonoBehaviour
 
         if (isAttacking)
             HandleAttack();
+    }
+
+    private void PlayAttackAnimation(Attack atk)
+    {
+        if (anim == null) return;
+
+        else if (atk.animationClip != null)
+            anim.Play(atk.animationClip.name);
     }
 
     public void TryRandomAttack(Transform playerTransform)
@@ -106,6 +122,7 @@ public class KnightBossPhase1Attacks : MonoBehaviour
         currentAttack = attack.name;
         attackTimer = attack.duration;
 
+        // reset cooldowns
         switch (attack.name)
         {
             case "Basic": basicAttackTimer = basicAttackCooldown; break;
@@ -119,6 +136,10 @@ public class KnightBossPhase1Attacks : MonoBehaviour
         if (movement != null)
             movement.enabled = false;
 
+        // 🎞 play animation now
+        PlayAttackAnimation(attack);
+
+        // start attack logic
         if (attack.name == "Lunge")
             StartCoroutine(DoLunge(dir));
         else if (attack.name == "Slam")
@@ -142,10 +163,8 @@ public class KnightBossPhase1Attacks : MonoBehaviour
         Debug.Log("Knight Boss lunging toward player!");
         rb.velocity = Vector2.zero;
 
-        // Disable collider temporarily (to pass through player, not ground)
         bossCollider.enabled = false;
 
-        // Activate lunge hitbox
         if (lungeHitbox != null)
         {
             lungeHitbox.gameObject.SetActive(true);
@@ -157,24 +176,18 @@ public class KnightBossPhase1Attacks : MonoBehaviour
 
         while (elapsed < lungeAttack.duration)
         {
-            // Apply forward force
             rb.velocity = dir * lungeAttack.horizontalForce;
 
-            // ✅ Ground check to prevent sinking through floor
             RaycastHit2D groundHit = Physics2D.Raycast(transform.position, Vector2.down, groundCheckDistance, groundLayerMask);
             if (groundHit.collider != null)
             {
-                // We've reached the ground — re-enable collider to keep boss above it
                 bossCollider.enabled = true;
-
-                // Snap slightly above the ground and stop downward motion
                 Vector3 pos = transform.position;
                 pos.y = groundHit.point.y + 0.1f;
                 transform.position = pos;
                 rb.velocity = new Vector2(rb.velocity.x, Mathf.Max(rb.velocity.y, 0f));
             }
 
-            // Damage check for player
             Collider2D hit = Physics2D.OverlapCircle(transform.position, 1.2f, LayerMask.GetMask("Default"));
             if (hit != null && hit.CompareTag("Player") && !hasHitPlayer)
             {

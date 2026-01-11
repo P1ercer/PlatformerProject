@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class ThiefAI : MonoBehaviour
 {
@@ -13,7 +14,7 @@ public class ThiefAI : MonoBehaviour
     public bool patrol = true;
     public Vector3 patrolDirection = Vector3.right;
     public float patrolDistance = 3f;
-    public float groundCheckDistance = 0.5f; // How far ahead to check for ground
+    public float groundCheckDistance = 0.5f;
 
     [Header("Stealing Settings")]
     public int coinsToSteal = 2;
@@ -22,8 +23,15 @@ public class ThiefAI : MonoBehaviour
     public float stealCooldown = 5f;
 
     [Header("Coin Drop Settings")]
-    public GameObject coinPrefab; // Assign your coin prefab here
+    public GameObject coinPrefab;
     public float coinDropSpread = 0.5f;
+
+    [Header("Animation Settings")]
+    public Animator attackAnimator;   // For damaging player
+    public Animator stealAnimator;    // For stealing coins
+
+    [HideInInspector] public string attackTrigger = "Attack";
+    [HideInInspector] public string stealTrigger = "Steal";
 
     private GameObject player;
     private Rigidbody2D rb;
@@ -33,9 +41,9 @@ public class ThiefAI : MonoBehaviour
     private bool hasStolen = false;
     private float lastStealTime = -Mathf.Infinity;
 
+    private float distanceToPlayer; // <--- Added for global access
     private int stolenCoins = 0;
-
-    private GameObject targetCoin; // Current coin target to pick up
+    private GameObject targetCoin;
 
     void Start()
     {
@@ -44,9 +52,15 @@ public class ThiefAI : MonoBehaviour
         home = transform.position;
 
         rb.freezeRotation = true;
-        rb.gravityScale = 1f; // Enable gravity
+        rb.gravityScale = 1f;
 
         patrolDirection.Normalize();
+
+        // ✅ Only fix: Ignore collision with the player
+        Collider2D thiefCol = GetComponent<Collider2D>();
+        Collider2D playerCol = player.GetComponent<Collider2D>();
+        if (thiefCol != null && playerCol != null)
+            Physics2D.IgnoreCollision(thiefCol, playerCol);
     }
 
     void Update()
@@ -57,23 +71,22 @@ public class ThiefAI : MonoBehaviour
             return;
         }
 
+        Vector3 toPlayer = player.transform.position - transform.position;
+        distanceToPlayer = toPlayer.magnitude; // updated here
+
         if (hasStolen)
         {
             RunAwayFromPlayer();
             return;
         }
 
-        Vector3 toPlayer = player.transform.position - transform.position;
-        float distanceToPlayer = toPlayer.magnitude;
-
-        // Steal coins from player if close enough and cooldown done
         if (distanceToPlayer <= stealDistance && Time.time >= lastStealTime + stealCooldown)
         {
             StealFromPlayer();
+            PlayStealAnimation();
             return;
         }
 
-        // Otherwise try to pick up world coins
         FindClosestCoin();
 
         if (targetCoin != null)
@@ -82,7 +95,6 @@ public class ThiefAI : MonoBehaviour
             return;
         }
 
-        // Chase player if close enough but not stealing
         if (distanceToPlayer < chaseTriggerDistance)
         {
             ChasePlayer(toPlayer);
@@ -106,6 +118,7 @@ public class ThiefAI : MonoBehaviour
         Collectables playerCollect = player.GetComponent<Collectables>();
         PlayerHealth playerHealth = player.GetComponent<PlayerHealth>();
 
+        // Steal coins
         if (playerCollect != null && playerCollect.coins > 0)
         {
             int stolenAmount = Mathf.Min(coinsToSteal, playerCollect.coins);
@@ -114,11 +127,19 @@ public class ThiefAI : MonoBehaviour
             Debug.Log($"Thief stole {stolenAmount} coins from player!");
         }
 
-        if (playerHealth != null)
+        // Deal damage
+        if (playerHealth != null && !playerHealth.GetComponent<Powerups>().isInvincible)
         {
             playerHealth.health -= damageToPlayer;
+
+            if (playerHealth.health < 0) playerHealth.health = 0;
             playerHealth.healthBar.fillAmount = playerHealth.health / playerHealth.maxHealth;
+
+            if (playerHealth.health <= 0)
+                SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+
             Debug.Log($"Thief damaged player for {damageToPlayer} health!");
+            PlayAttackAnimation(); // separate attack animation
         }
 
         hasStolen = true;
@@ -126,17 +147,27 @@ public class ThiefAI : MonoBehaviour
         rb.velocity = new Vector2(0, rb.velocity.y);
     }
 
+    void PlayStealAnimation()
+    {
+        if (stealAnimator != null && !string.IsNullOrEmpty(stealTrigger))
+            stealAnimator.SetTrigger(stealTrigger);
+    }
+
+    void PlayAttackAnimation()
+    {
+        if (attackAnimator != null && !string.IsNullOrEmpty(attackTrigger))
+            attackAnimator.SetTrigger(attackTrigger);
+    }
+
     void FindClosestCoin()
     {
         GameObject[] coins = GameObject.FindGameObjectsWithTag("Coin");
-
         GameObject closest = null;
         float closestDist = Mathf.Infinity;
 
         foreach (GameObject coin in coins)
         {
             float dist = Vector3.Distance(transform.position, coin.transform.position);
-
             if (dist < closestDist && dist <= chaseTriggerDistance)
             {
                 closestDist = dist;
@@ -162,11 +193,11 @@ public class ThiefAI : MonoBehaviour
         {
             PickUpCoin();
             rb.velocity = new Vector2(0, rb.velocity.y);
+            PlayStealAnimation();
             return;
         }
         else
         {
-            // Only move if there's ground ahead
             if (IsGroundAhead(toCoin.normalized.x))
                 rb.velocity = new Vector2(toCoin.normalized.x * chaseSpeed, rb.velocity.y);
             else
@@ -271,17 +302,12 @@ public class ThiefAI : MonoBehaviour
             rb.velocity = new Vector2(0, rb.velocity.y);
     }
 
-    // Check if there's ground ahead
     bool IsGroundAhead(float dir)
     {
         Vector2 origin = (Vector2)transform.position + Vector2.down * 0.1f;
         Vector2 direction = Vector2.right * Mathf.Sign(dir);
 
         RaycastHit2D hit = Physics2D.Raycast(origin + direction * 0.3f, Vector2.down, groundCheckDistance);
-
-        // Uncomment to debug raycast
-        // Debug.DrawRay(origin + direction * 0.3f, Vector2.down * groundCheckDistance, Color.red);
-
         return hit.collider != null;
     }
 

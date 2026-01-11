@@ -13,86 +13,233 @@ public class KnightBossPhase2Attacks : MonoBehaviour
         public float damage;
         public float range;
         public float duration;
+        [HideInInspector] public float nextUseTime;
+
+        [Header("🔥 Burn Effect")]
+        public float burnDuration;
+        public float burnTickDamage;
+
+        [Header("🎞 Animation")]
+        [Tooltip("Trigger name or AnimationClip for this attack")]
+       [HideInInspector] public string animationTrigger; // 👈 assign the trigger name in Inspector
+        public AnimationClip animationClip; // optional, if you want direct clip playback
+    }
+
+    [System.Serializable]
+    public class PhysicalAttack
+    {
+        public string name;
+        public float damage;
+        public float range;
+        public float duration;
+        [HideInInspector] public float nextUseTime;
+
+        [Header("🎞 Animation")]
+        [Tooltip("Trigger name or AnimationClip for this physical attack")]
+        [HideInInspector] public string animationTrigger; // 👈 assign manually per attack
+        public AnimationClip animationClip;
     }
 
     [Header("Phase 2 Attacks")]
     public Attack flamingSlam;
     public Attack infernalTorrent;
-    public Attack groundBreaker;
+    public PhysicalAttack groundBreaker;
     public Attack moltenEruption;
+    public Attack openingRanged;
+    public PhysicalAttack basicAttack;
+
+    [Header("Attack Cooldowns")]
+    public float flamingSlamCooldown = 5f;
+    public float infernalTorrentCooldown = 8f;
+    public float groundBreakerCooldown = 10f;
+    public float moltenEruptionCooldown = 12f;
+
+    [Header("Projectile Prefab (Opening Ranged)")]
+    public GameObject projectilePrefab;
+    public Transform projectileSpawnPoint;
+    [Tooltip("Multiplier to adjust the projectile speed in the editor (1 = normal speed)")]
+    public float projectileSpeedMultiplier = 1f;
 
     [Header("Hitbox Settings")]
     public LayerMask playerLayer;
     public float slamRadius = 2.5f;
     public float eruptionRadius = 4f;
     public Vector2 groundBreakerSize = new Vector2(3f, 1.2f);
+    public float basicAttackRange = 2f;
 
     private Rigidbody2D rb;
     private KnightBossMovement movement;
+    private Animator anim;
     private Transform player;
-    [HideInInspector] public bool isAttacking = false;
+    private bool hasUsedOpeningRanged = false;
+    private List<(Vector3 pos, float size, bool box, float time)> debugHits = new();
 
-    private List<(Vector3 pos, float size, bool box, float time)> debugHits = new List<(Vector3, float, bool, float)>();
+    [HideInInspector] public bool isAttacking = false;
 
     private void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         movement = GetComponent<KnightBossMovement>();
+        anim = GetComponent<Animator>();
         player = GameObject.FindGameObjectWithTag("Player")?.transform;
     }
 
+    // Helper to play assigned animation
+    private void PlayAttackAnimation(string trigger, AnimationClip clip)
+    {
+        if (anim == null) return;
+
+        if (!string.IsNullOrEmpty(trigger))
+        {
+            anim.SetTrigger(trigger); // play by trigger
+        }
+        else if (clip != null)
+        {
+            anim.Play(clip.name); // play direct clip if specified
+        }
+    }
     // --------------------------------------------------
     // ATTACK CHOOSER
     // --------------------------------------------------
     public void TryRandomAttack(Transform target)
     {
-        if (isAttacking) return;
-        int choice = Random.Range(0, 4);
-        switch (choice)
+        if (isAttacking || player == null) return;
+
+        // Opening ranged attack once at start of Phase 2
+        if (!hasUsedOpeningRanged)
         {
-            case 0: StartCoroutine(FlamingSlamRoutine(flamingSlam)); break;
-            case 1: StartCoroutine(InfernalTorrentRoutine(infernalTorrent)); break;
-            case 2: StartCoroutine(GroundBreakerRoutine(groundBreaker)); break;
-            case 3: StartCoroutine(MoltenEruptionRoutine(moltenEruption)); break;
+            hasUsedOpeningRanged = true;
+            StartCoroutine(OpeningRangedAttack(openingRanged));
+            return;
         }
+
+        float dist = Vector2.Distance(transform.position, player.position);
+        List<System.Action> possibleAttacks = new List<System.Action>();
+
+        if (Time.time >= flamingSlam.nextUseTime)
+            possibleAttacks.Add(() => StartCoroutine(FlamingSlamRoutine(flamingSlam)));
+
+        if (Time.time >= infernalTorrent.nextUseTime)
+            possibleAttacks.Add(() => StartCoroutine(InfernalTorrentRoutine(infernalTorrent)));
+
+        if (dist <= 5f && Time.time >= groundBreaker.nextUseTime)
+            possibleAttacks.Add(() => StartCoroutine(GroundBreakerRoutine(groundBreaker)));
+
+        if (dist <= 5f && Time.time >= moltenEruption.nextUseTime)
+            possibleAttacks.Add(() => StartCoroutine(MoltenEruptionRoutine(moltenEruption)));
+
+        if (possibleAttacks.Count == 0)
+        {
+            StartCoroutine(BasicAttackRoutine(basicAttack));
+            return;
+        }
+
+        int choice = Random.Range(0, possibleAttacks.Count);
+        possibleAttacks[choice].Invoke();
     }
-
     // --------------------------------------------------
-    // FLAMING SLAM — jump then slam down
+    // BASIC ATTACK (Fallback)
     // --------------------------------------------------
-    private IEnumerator FlamingSlamRoutine(Attack atk)
+    private IEnumerator BasicAttackRoutine(PhysicalAttack atk)
     {
-        Debug.Log("🔥 Flaming Slam!");
+        Debug.Log("⚔️ Basic melee attack!");
         isAttacking = true;
+        PlayAttackAnimation(atk.animationTrigger, atk.animationClip); // 👈 plays assigned animation
 
-        rb.velocity = new Vector2(rb.velocity.x, atk.range + 10f);
-        yield return new WaitUntil(() => rb.velocity.y <= 0);
+        yield return new WaitForSeconds(0.3f);
 
-        rb.velocity = new Vector2(0, -atk.range * 3f);
-        yield return new WaitUntil(() => movementGrounded());
+        Vector2 dir = player != null ? (player.position - transform.position).normalized : Vector2.right;
+        Vector2 hitCenter = (Vector2)transform.position + dir * basicAttackRange * 0.5f;
 
-        DoAOEDamage(transform.position, slamRadius, atk.damage, 4f, 3f);
-        CreateDebugHit(transform.position, slamRadius, false);
+        Collider2D[] hits = Physics2D.OverlapCircleAll(hitCenter, 1.2f, playerLayer);
+        foreach (Collider2D hit in hits)
+        {
+            if (hit.CompareTag("Player"))
+            {
+                PlayerHealth ph = hit.GetComponent<PlayerHealth>();
+                if (ph != null)
+                    ph.TakeDamage(atk.damage);
+            }
+        }
 
-        yield return new WaitForSeconds(0.5f);
+        CreateDebugHit(hitCenter, 1.2f, false);
+        yield return new WaitForSeconds(0.4f);
         isAttacking = false;
     }
 
     // --------------------------------------------------
-    // INFERNAL TORRENT — spinning rush
+    // FLAMING SLAM
+    // --------------------------------------------------
+    private IEnumerator FlamingSlamRoutine(Attack atk)
+    {
+        Debug.Log("Flaming Slam!");
+        isAttacking = true;
+        atk.nextUseTime = Time.time + flamingSlamCooldown;
+
+        PlayAttackAnimation(atk.animationTrigger, atk.animationClip);
+
+        if (movement != null)
+            movement.enabled = false;
+
+        rb.velocity = new Vector2(0, atk.range + 10f);
+        yield return new WaitUntil(() => rb.velocity.y <= 0);
+
+        Vector2 diveDir = player != null ? (player.position - transform.position).normalized : Vector2.down;
+        rb.velocity = diveDir * (atk.range + 8f);
+
+        bool hitGround = false;
+        while (!hitGround)
+        {
+            if (movementGrounded())
+                hitGround = true;
+
+            Collider2D hit = Physics2D.OverlapCircle(transform.position, 1.5f, playerLayer);
+            if (hit != null && hit.CompareTag("Player"))
+            {
+                PlayerHealth ph = hit.GetComponent<PlayerHealth>();
+                if (ph != null)
+                {
+                    ph.TakeDamage(atk.damage);
+                    if (atk.burnDuration > 0)
+                    {
+                        FireDebuff burn = hit.GetComponent<FireDebuff>() ?? hit.gameObject.AddComponent<FireDebuff>();
+                        burn.ApplyBurn(atk.burnDuration, atk.burnTickDamage);
+                    }
+                }
+
+                CreateDebugHit(transform.position, 1.5f, false);
+                break;
+            }
+            yield return null;
+        }
+
+        rb.velocity = Vector2.zero;
+        yield return new WaitForSeconds(0.4f);
+
+        if (movement != null)
+            movement.enabled = true;
+
+        isAttacking = false;
+    }
+
+    // --------------------------------------------------
+    // INFERNAL TORRENT
     // --------------------------------------------------
     private IEnumerator InfernalTorrentRoutine(Attack atk)
     {
         Debug.Log("🔥 Infernal Torrent!");
         isAttacking = true;
+        atk.nextUseTime = Time.time + infernalTorrentCooldown;
+
+        PlayAttackAnimation(atk.animationTrigger, atk.animationClip);
 
         float elapsed = 0f;
         while (elapsed < atk.duration)
         {
             if (player != null)
-                MoveTowardsPlayer(3.5f);
+                MoveTowardsPlayer(2.2f);
 
-            DoAOEDamage(transform.position, 1.6f, atk.damage * 0.75f, 2.5f, 2f);
+            DoAOEDamage(transform.position, 1.6f, atk);
             CreateDebugHit(transform.position, 1.6f, false);
 
             yield return new WaitForSeconds(0.4f);
@@ -104,18 +251,21 @@ public class KnightBossPhase2Attacks : MonoBehaviour
     }
 
     // --------------------------------------------------
-    // GROUND BREAKER — ground-only smash
+    // GROUND BREAKER
     // --------------------------------------------------
-    private IEnumerator GroundBreakerRoutine(Attack atk)
+    private IEnumerator GroundBreakerRoutine(PhysicalAttack atk)
     {
         Debug.Log("💥 Ground Breaker!");
         isAttacking = true;
+        atk.nextUseTime = Time.time + groundBreakerCooldown;
+
+        PlayAttackAnimation(atk.animationTrigger, atk.animationClip);
 
         rb.velocity = new Vector2(0, 8f);
         yield return new WaitUntil(() => rb.velocity.y <= 0 && movementGrounded());
 
         Vector2 boxCenter = (Vector2)transform.position + Vector2.down * 0.5f;
-        DoBoxDamage(boxCenter, groundBreakerSize, atk.damage, 0f, 0f);
+        DoBoxDamage_NoBurn(boxCenter, groundBreakerSize, atk);
         CreateDebugHit(boxCenter, groundBreakerSize.x, true);
 
         yield return new WaitForSeconds(0.6f);
@@ -123,16 +273,18 @@ public class KnightBossPhase2Attacks : MonoBehaviour
     }
 
     // --------------------------------------------------
-    // MOLTEN ERUPTION — AoE around Knight
+    // MOLTEN ERUPTION
     // --------------------------------------------------
     private IEnumerator MoltenEruptionRoutine(Attack atk)
     {
         Debug.Log("🌋 Molten Eruption!");
         isAttacking = true;
+        atk.nextUseTime = Time.time + moltenEruptionCooldown;
+
+        PlayAttackAnimation(atk.animationTrigger, atk.animationClip);
 
         yield return new WaitForSeconds(atk.duration * 0.4f);
-
-        DoAOEDamage(transform.position, eruptionRadius, atk.damage * 0.8f, 5f, 2.5f);
+        DoAOEDamage(transform.position, eruptionRadius, atk);
         CreateDebugHit(transform.position, eruptionRadius, false);
 
         yield return new WaitForSeconds(atk.duration * 0.6f);
@@ -140,9 +292,66 @@ public class KnightBossPhase2Attacks : MonoBehaviour
     }
 
     // --------------------------------------------------
+    // OPENING RANGED
+    // --------------------------------------------------
+    private IEnumerator OpeningRangedAttack(Attack atk)
+    {
+        Debug.Log("💨 Opening Ranged Projectile!");
+        isAttacking = true;
+
+        PlayAttackAnimation(atk.animationTrigger, atk.animationClip);
+
+        yield return new WaitForSeconds(1f);
+
+        if (projectilePrefab != null && projectileSpawnPoint != null && player != null)
+        {
+            Vector2 dir = (player.position - projectileSpawnPoint.position).normalized;
+            GameObject proj = Instantiate(projectilePrefab, projectileSpawnPoint.position, Quaternion.identity);
+            Rigidbody2D prb = proj.GetComponent<Rigidbody2D>();
+            if (prb != null)
+                prb.velocity = dir * atk.range * projectileSpeedMultiplier;
+
+            StartCoroutine(DestroyProjectileAfterHit(proj, atk));
+        }
+
+        yield return new WaitForSeconds(0.5f);
+        isAttacking = false;
+    }
+
+    private IEnumerator DestroyProjectileAfterHit(GameObject proj, Attack atk)
+    {
+        float maxLifetime = 5f;
+        float elapsed = 0f;
+
+        while (proj != null && elapsed < maxLifetime)
+        {
+            Collider2D hit = Physics2D.OverlapCircle(proj.transform.position, 0.3f, playerLayer);
+            if (hit != null && hit.CompareTag("Player"))
+            {
+                PlayerHealth ph = hit.GetComponent<PlayerHealth>();
+                if (ph != null) ph.TakeDamage(atk.damage);
+
+                if (atk.burnDuration > 0)
+                {
+                    FireDebuff burn = hit.GetComponent<FireDebuff>() ?? hit.gameObject.AddComponent<FireDebuff>();
+                    burn.ApplyBurn(atk.burnDuration, atk.burnTickDamage);
+                }
+
+                Destroy(proj);
+                yield break;
+            }
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (proj != null) Destroy(proj);
+    }
+
+    // --------------------------------------------------
     // DAMAGE HELPERS
     // --------------------------------------------------
-    private void DoAOEDamage(Vector2 center, float radius, float damage, float burnDuration, float burnTick)
+    private void DoAOEDamage(Vector2 center, float radius, Attack atk)
     {
         Collider2D[] hits = Physics2D.OverlapCircleAll(center, radius, playerLayer);
         foreach (Collider2D hit in hits)
@@ -151,18 +360,17 @@ public class KnightBossPhase2Attacks : MonoBehaviour
             PlayerHealth ph = hit.GetComponent<PlayerHealth>();
             if (ph == null) continue;
 
-            ph.TakeDamage(damage);
+            ph.TakeDamage(atk.damage);
 
-            if (burnDuration > 0)
+            if (atk.burnDuration > 0)
             {
-                FireDebuff burn = hit.GetComponent<FireDebuff>();
-                if (burn == null) burn = hit.gameObject.AddComponent<FireDebuff>();
-                burn.ApplyBurn(burnDuration, burnTick);
+                FireDebuff burn = hit.GetComponent<FireDebuff>() ?? hit.gameObject.AddComponent<FireDebuff>();
+                burn.ApplyBurn(atk.burnDuration, atk.burnTickDamage);
             }
         }
     }
 
-    private void DoBoxDamage(Vector2 center, Vector2 size, float damage, float burnDuration, float burnTick)
+    private void DoBoxDamage_NoBurn(Vector2 center, Vector2 size, PhysicalAttack atk)
     {
         Collider2D[] hits = Physics2D.OverlapBoxAll(center, size, 0f, playerLayer);
         foreach (Collider2D hit in hits)
@@ -170,15 +378,7 @@ public class KnightBossPhase2Attacks : MonoBehaviour
             if (!hit.CompareTag("Player")) continue;
             PlayerHealth ph = hit.GetComponent<PlayerHealth>();
             if (ph == null) continue;
-
-            ph.TakeDamage(damage);
-
-            if (burnDuration > 0)
-            {
-                FireDebuff burn = hit.GetComponent<FireDebuff>();
-                if (burn == null) burn = hit.gameObject.AddComponent<FireDebuff>();
-                burn.ApplyBurn(burnDuration, burnTick);
-            }
+            ph.TakeDamage(atk.damage);
         }
     }
 
@@ -195,71 +395,35 @@ public class KnightBossPhase2Attacks : MonoBehaviour
     }
 
     // --------------------------------------------------
-    // DEBUG VISUALS
+    // DEBUG VISUALS (unchanged)
     // --------------------------------------------------
     private void CreateDebugHit(Vector3 pos, float size, bool box)
     {
         debugHits.Add((pos, size, box, Time.time + 0.5f));
-
-        // Show a quick visual indicator in Play mode
-        if (Application.isPlaying)
-        {
-            if (box)
-            {
-                DebugDrawBox(pos, new Vector2(size, size / 3f), Color.red, 0.5f);
-            }
-            else
-            {
-                DebugDrawCircle(pos, size, Color.red, 0.5f);
-            }
-        }
     }
 
-    private void Update()
-    {
-        // Remove expired debug markers
-        debugHits.RemoveAll(d => Time.time > d.time);
-    }
+    private void Update() => debugHits.RemoveAll(d => Time.time > d.time);
 
+#if UNITY_EDITOR
     private void OnDrawGizmos()
     {
-        Gizmos.color = new Color(1f, 0.3f, 0.2f, 0.3f);
-        foreach (var d in debugHits)
+        if (debugHits == null) return;
+
+        Gizmos.color = new Color(1f, 0.5f, 0f, 0.4f); // orange tint
+        foreach (var hit in debugHits)
         {
-            if (d.box)
-                Gizmos.DrawWireCube(d.pos, new Vector3(d.size, d.size / 3f, 1));
+            if (hit.box)
+            {
+                // Draw a rectangle for box-type hitboxes
+                Gizmos.DrawWireCube(hit.pos, new Vector3(hit.size, hit.size * 0.4f, 0f));
+            }
             else
-                Gizmos.DrawWireSphere(d.pos, d.size);
+            {
+                // Draw a circle for radial hitboxes
+                Gizmos.DrawWireSphere(hit.pos, hit.size);
+            }
         }
     }
+#endif
 
-    // --------------------------------------------------
-    // Debug Draw helpers (visible in Game view during Play)
-    // --------------------------------------------------
-    private void DebugDrawCircle(Vector3 center, float radius, Color color, float duration)
-    {
-        int segments = 20;
-        Vector3 prev = center + Vector3.right * radius;
-        for (int i = 1; i <= segments; i++)
-        {
-            float angle = i * Mathf.PI * 2f / segments;
-            Vector3 next = center + new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0) * radius;
-            Debug.DrawLine(prev, next, color, duration);
-            prev = next;
-        }
-    }
-
-    private void DebugDrawBox(Vector3 center, Vector2 size, Color color, float duration)
-    {
-        Vector3 half = (Vector3)size / 2f;
-        Vector3 topLeft = center + new Vector3(-half.x, half.y);
-        Vector3 topRight = center + new Vector3(half.x, half.y);
-        Vector3 bottomRight = center + new Vector3(half.x, -half.y);
-        Vector3 bottomLeft = center + new Vector3(-half.x, -half.y);
-
-        Debug.DrawLine(topLeft, topRight, color, duration);
-        Debug.DrawLine(topRight, bottomRight, color, duration);
-        Debug.DrawLine(bottomRight, bottomLeft, color, duration);
-        Debug.DrawLine(bottomLeft, topLeft, color, duration);
-    }
 }

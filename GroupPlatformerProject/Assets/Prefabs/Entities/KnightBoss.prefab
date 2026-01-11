@@ -208,7 +208,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 6.57, y: -2.9757, z: 0}
-  m_LocalScale: {x: 1, y: 1.9486, z: 1}
+  m_LocalScale: {x: 0.9587, y: 0.97644347, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 280556211154133365}
@@ -255,8 +255,8 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 311925a002f4447b3a28927169b83ea6, type: 3}
-  m_Color: {r: 0.5660378, g: 0.32840872, b: 0.32840872, a: 1}
+  m_Sprite: {fileID: -903779073, guid: feec63b6ef4ae0e4bb5917f3a049c4de, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -325,18 +325,18 @@ BoxCollider2D:
   m_IsTrigger: 0
   m_UsedByEffector: 0
   m_UsedByComposite: 0
-  m_Offset: {x: 0, y: 0}
+  m_Offset: {x: -0.000000029802322, y: -0.20221424}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1, y: 1}
+    oldSize: {x: 2.9230769, y: 2.9230769}
     newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
   m_AutoTiling: 0
   serializedVersion: 2
-  m_Size: {x: 1, y: 1}
+  m_Size: {x: 1.4347987, y: 2.6177144}
   m_EdgeRadius: 0
 --- !u!114 &6197023008955784789
 MonoBehaviour:
@@ -357,25 +357,33 @@ MonoBehaviour:
     duration: 0.8
     horizontalForce: 5
     verticalForce: 0
-    damage: 0
+    damage: 50
+    animationTrigger: 
+    animationClip: {fileID: 0}
   lungeAttack:
     name: Lunge
     duration: 1
     horizontalForce: 10
     verticalForce: 0
-    damage: 0
+    damage: 50
+    animationTrigger: 
+    animationClip: {fileID: 0}
   slamAttack:
     name: Slam
     duration: 1.5
     horizontalForce: 5
     verticalForce: 12
-    damage: 1
+    damage: 50
+    animationTrigger: 
+    animationClip: {fileID: 0}
   powerBoostAttack:
     name: PowerBoost
     duration: 0.8
     horizontalForce: 5
     verticalForce: 0
     damage: 0
+    animationTrigger: 
+    animationClip: {fileID: 0}
   lungeHitbox: {fileID: 5385063178737526275}
   groundLayerMask:
     serializedVersion: 2
@@ -402,27 +410,71 @@ MonoBehaviour:
     damage: 1
     range: 3
     duration: 1.2
+    nextUseTime: 0
+    burnDuration: 3
+    burnTickDamage: 5
+    animationTrigger: 
+    animationClip: {fileID: 0}
   infernalTorrent:
     name: InfernalTorrent
     damage: 10
     range: 2.5
     duration: 2.8
+    nextUseTime: 0
+    burnDuration: 3
+    burnTickDamage: 7
+    animationTrigger: 
+    animationClip: {fileID: 0}
   groundBreaker:
     name: GroundBreaker
     damage: 22
     range: 3
     duration: 1.3
+    nextUseTime: 0
+    animationTrigger: 
+    animationClip: {fileID: 0}
   moltenEruption:
     name: MoltenEruption
     damage: 25
     range: 3
     duration: 1.5
+    nextUseTime: 0
+    burnDuration: 5
+    burnTickDamage: 5
+    animationTrigger: 
+    animationClip: {fileID: 0}
+  openingRanged:
+    name: Flaming Bolt
+    damage: 15
+    range: 50
+    duration: 3
+    nextUseTime: 0
+    burnDuration: 0
+    burnTickDamage: 0
+    animationTrigger: 
+    animationClip: {fileID: 0}
+  basicAttack:
+    name: Slash
+    damage: 10
+    range: 3
+    duration: 0
+    nextUseTime: 0
+    animationTrigger: 
+    animationClip: {fileID: 0}
+  flamingSlamCooldown: 18
+  infernalTorrentCooldown: 16
+  groundBreakerCooldown: 18
+  moltenEruptionCooldown: 20
+  projectilePrefab: {fileID: 7980403543528529909, guid: a4c052102bec3c04c829f314432b3366, type: 3}
+  projectileSpawnPoint: {fileID: 8358899320788413809}
+  projectileSpeedMultiplier: 0.4
   playerLayer:
     serializedVersion: 2
     m_Bits: 8
   slamRadius: 2.5
   eruptionRadius: 4
   groundBreakerSize: {x: 3, y: 1.2}
+  basicAttackRange: 2
   isAttacking: 0
 --- !u!114 &359543304972967180
 MonoBehaviour:
@@ -439,7 +491,7 @@ MonoBehaviour:
   phase1Attacks: {fileID: 6197023008955784789}
   phase2Attacks: {fileID: 5971663305291189201}
   knightMovement: {fileID: 1297400364880600456}
-  phase2Threshold: 1
+  phase2Threshold: 0.5
 --- !u!114 &1297400364880600456
 MonoBehaviour:
   m_ObjectHideFlags: 0

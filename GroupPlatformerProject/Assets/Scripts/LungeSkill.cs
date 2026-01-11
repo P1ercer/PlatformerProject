@@ -17,6 +17,22 @@ public class LungeSkill : MonoBehaviour
     [Header("References")]
     public GameObject lungeHitbox;  // Assign in Inspector
 
+    // -------------------------------
+    // Animation Fields
+    // -------------------------------
+    [Header("Animation Settings")]
+    [Tooltip("Animator component for playing the lunge animation.")]
+    public Animator animator;
+
+    [Tooltip("Trigger name for lunge animation (optional).")]
+    private string lungeTrigger = "Lunge";
+
+    [Tooltip("Optional animation clip to play instead of a trigger.")]
+    public AnimationClip lungeAnimationClip;
+
+    // -------------------------------
+    // Private Fields
+    // -------------------------------
     private bool isLunging = false;
     private float lungeCooldownTimer = 0f;
     private Vector2 lungeTargetPosition;
@@ -36,6 +52,10 @@ public class LungeSkill : MonoBehaviour
             lungeHitbox.SetActive(false);
         else
             Debug.LogWarning("LungeHitbox reference not set in LungeSkill.");
+
+        // Auto-assign animator if missing
+        if (animator == null)
+            animator = GetComponent<Animator>();
     }
 
     void Update()
@@ -74,6 +94,8 @@ public class LungeSkill : MonoBehaviour
 
         if (lungeHitbox != null)
             lungeHitbox.SetActive(true);
+
+        PlayLungeAnimation();
     }
 
     void FixedUpdate()
@@ -116,6 +138,23 @@ public class LungeSkill : MonoBehaviour
         {
             KnightBoss.TakeDamage((int)lungeDamage);
             Debug.Log($"LungeSkill applied {lungeDamage} damage to {KnightBoss.name}");
+        }
+    }
+
+    // ---------------------------------------
+    // Animation Helper
+    // ---------------------------------------
+    void PlayLungeAnimation()
+    {
+        if (animator == null) return;
+
+        if (!string.IsNullOrEmpty(lungeTrigger))
+        {
+            animator.SetTrigger(lungeTrigger);
+        }
+        else if (lungeAnimationClip != null)
+        {
+            animator.Play(lungeAnimationClip.name);
         }
     }
 }
